@@ -1,0 +1,96 @@
+#!/bin/sh
+
+DOMAIN=base-lcd
+
+# Setup the path so we find stuff...
+. /etc/rc.d/init.d/functions
+LOCKFILE="/etc/locks/.lcdlock"
+
+# clean up lockfile if no one is using it
+if [ -e $LOCKFILE ]; then 
+        PID=`cat $LOCKFILE`
+        if [ -z "`ps --no-heading -p $PID 2>/dev/null`" ]; then
+                rm -f $LOCKFILE
+        else
+                exit 1
+        fi
+fi
+
+WORDS=`hostname`
+if [ "$WORDS" = "localhost" ]; then
+          WORDS=`getmsg lcd_ipaddr`
+fi
+
+
+IPADDR=`ifconfig eth0 | grep "inet addr" | cut -f 2 -d":" | cut -f 1 -d" "`
+if [ "$IPADDR" = "" ]; then
+        IPADDR="IP Addr Not Set"
+fi
+
+SYSTEM=$WORDS
+
+/sbin/lcdstop
+/sbin/lcd-write "$SYSTEM" "$IPADDR"
+
+sleep 3
+
+ruptime="$( uptime)"
+if $(echo $ruptime | grep -E "min|days" >/dev/null); then
+   x=$(echo $ruptime | awk '{ print $3 $4}')
+else
+   x=$(echo $ruptime | sed s/,//g| awk '{ print $3 }')
+fi
+ruptime="$x"
+
+
+up="uptime: "$x
+STATUS=$up
+
+/sbin/lcdstop
+/sbin/lcd-write "$SYSTEM" "$STATUS"
+
+sleep 3
+
+CPU=`ps -eo pcpu,pid -o comm= | sort -k1 -n -r | head -1 | awk '{ print $1 } '`
+
+STATUS="cpu: "$CPU"%"
+
+/sbin/lcdstop
+/sbin/lcd-write "$SYSTEM" "$STATUS"
+
+sleep 3
+
+TEMP=`cat /proc/cobalt/sensors/thermal | cut -f2 -d:`
+TEMP=`expr substr $TEMP 1 2`
+TEMP="temp: "$TEMP"c"
+STATUS=$TEMP
+
+/sbin/lcdstop
+/sbin/lcd-write "$SYSTEM" "$STATUS"
+
+sleep 3
+
+rusedram="$(free -mto | grep Mem: | awk '{ print $3 }')"
+rtotalram="$(free -mto | grep Mem: | awk '{ print $2 }')"
+ram=`echo "$rusedram * 100"|bc`
+ram=`echo " $ram / $rtotalram"|bc`
+
+STATUS="ram: "$rusedram"/"$rtotalram"MB"
+
+/sbin/lcdstop
+/sbin/lcd-write "$SYSTEM" "$STATUS"
+
+sleep 3
+
+disku="$(df -h | grep home | awk '{ print $3}')"
+diskt="$(df -h | grep home | awk '{ print $2}')"
+STATUS="disk: "$disku"/"$diskt
+
+/sbin/lcdstop
+/sbin/lcd-write "$SYSTEM" "$STATUS"
+
+sleep 3
+
+/sbin/lcd-write "$SYSTEM" "$IPADDR"
+
+exit 0
